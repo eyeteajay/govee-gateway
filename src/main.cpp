@@ -71,6 +71,7 @@ void scan(Govee_logger* gl)
 	BLEScan gble;	//!< BLEScan object
 
 	// connect to BLE and start scanning
+	std::cerr << "start scan [" << gl->verbosity << "]..." << std::endl;
 	if (gble.connect())
 	{
 		while (isScanning)
@@ -84,24 +85,26 @@ void scan(Govee_logger* gl)
 					bp.printInfo(gl->verbosity);
 				}
 
-				// see if we have manufacturer data
 				std::map<int,BLEPacket::t_adStructure>::iterator it = bp.adStructures.find(0xff);
 				if (it!=bp.adStructures.end())
 				{
-					// do we have a packet starting with 0x88EC? If so, we likely have a Govee sensor
-					if (it->second.data[0]==0x88 && it->second.data[1]==0xEC)
+					std::map<int,BLEPacket::t_adStructure>::iterator servit = bp.adStructures.find(0x03);
+
+					// do we have a 16bit service uuid with 0x88EC? If so, we likely have a Govee sensor
+					if (servit != bp.adStructures.end() && servit->second.data[0]==0x88 && servit->second.data[1]==0xEC)
 					{
 						// add to govee map if it doesn't exist yet;
 						if (goveeMap.find(bp.bdaddr) == goveeMap.end())
 						{
-							bp.printInfo(gl->verbosity);
+							//bp.printInfo(gl->verbosity);
 							goveeMap.insert(std::make_pair(bp.bdaddr,1));
 						}
 						// log data
-						gl->logData(&bp,it->second.data);
+						gl->logData(&bp,it->second);
 					} // 088EC
 				} // manufacturer info
-				usleep(10000);		// 10000 us = 10ms = 0.01s
+				//usleep(10000);		// 10000 us = 10ms = 0.01s
+				usleep(100000);			// 100000 us = 100ms = 0.1s
 			} // scan
 		} // while
 		gble.disconnect();

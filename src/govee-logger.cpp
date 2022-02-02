@@ -116,7 +116,7 @@ void Govee_logger::initializeLogger(void)
 			std::cout <<ANSI_COLOR_RED << " failed." << ANSI_COLOR_RESET << std::endl;
 		}
 	}
-	if (!mqtt_active && !influx_active)
+	if (0) // (!mqtt_active && !influx_active)
 	{
 		std::cout << ANSI_COLOR_RED << "No active connections available. Terminating..." << ANSI_COLOR_RESET << std::endl;
 		exit(EXIT_FAILURE);
@@ -180,7 +180,10 @@ void Govee_logger::sendData()
 				// generate message
 				std::ostringstream mqtt_outStream;
 				mqtt_outStream << "{";
-				mqtt_outStream << "\"temp\":"  << std::dec << tempData.temperatureF << ",";
+				mqtt_outStream << "\"tempF\":"  << std::dec << tempData.temperatureF << ",";
+				mqtt_outStream << "\"tempC\":"  << std::dec << tempData.temperatureC << ",";
+				mqtt_outStream << "\"dewF\":" <<  tempData.dewF << ",";
+				mqtt_outStream << "\"dewC\":" <<  tempData.dewC << ",";
 				mqtt_outStream << "\"hum\":" <<  tempData.humidity << ",";
 				mqtt_outStream << "\"bat\":" << tempData.battery << ",";
 				mqtt_outStream << "\"ma\":" << int(tempData.ma) << ",";
@@ -209,12 +212,15 @@ void Govee_logger::sendData()
 			{
 				influxdb_cpp::builder()
 					.meas(influx_measurement)
-					.tag("ADR",addr)
-					.field("temp",tempData.temperatureF)
+					.tag("name",addr)
+					.field("tempF",tempData.temperatureF)
+					.field("tempC",tempData.temperatureC)
+					.field("dewF",tempData.dewF)
+					.field("dewC", tempData.dewC)
 					.field("hum",tempData.humidity)
 					.field("bat",tempData.battery)
-          .field("rssi",tempData.rssi)
-					.field("ma",tempData.ma)
+					.field("rssi",tempData.rssi)
+					//.field("ma",tempData.ma)
 					.post_http(si);
         if (verbosity>0)
         {
@@ -258,15 +264,16 @@ Govee_logger::Govee_logger(const char* iniFileName)
   initialized=true;
 }
 
-void Govee_logger::logData(const BLEPacket *bp, const char* data)
+//void Govee_logger::logData(const BLEPacket *bp, const char* data)
+void Govee_logger::logData(const BLEPacket *bp, const BLEPacket::t_adStructure &ad )
 {
   if (initialized)    // check if the logger has been intialized
   {
     // check if we have govee data
-    if (data[0]==0x88 && data[1]==0xEC)
+    if (ad.length >= 8) //(data[0]==0x88 && data[1]==0xEC)
     {
       GoveeData gd;
-      gd.decodeData(data);
+      gd.decodeData(ad.data);
       gd.rssi = bp->rssi;
 
       // log data into queue
@@ -277,10 +284,15 @@ void Govee_logger::logData(const BLEPacket *bp, const char* data)
       // print data
       if (verbosity>0)
       {
+	std::map<std::string, std::string>::const_iterator	it = adrMap.find(bp->addr);
+	const std::string					&name = it != adrMap.end() ? it->second : "?";
+
         std::cout << "Data logged. Queue#: " << std::setw(2) << ret.first->second.size() << ". ";
         std::cout.setf(std::ios::fixed);
         std::cout << std::setprecision(2);
-        std::cout << ANSI_BOLD << ANSI_COLOR_BLUE << "GOVEE " << ANSI_COLOR_RED << bp->addr << ANSI_COLOR_RESET;
+
+	std::cout << ANSI_BOLD << ANSI_COLOR_RED << bp->addr << ANSI_COLOR_BLUE << " " << name << ANSI_COLOR_RESET;
+        //std::cout << ANSI_BOLD << ANSI_COLOR_BLUE << "GOVEE " << ANSI_COLOR_RED << bp->addr << ANSI_COLOR_RESET;
         std::cout << " - Temp=" << gd.temperatureC << "C (" << gd.temperatureF <<"F), Hum="<< gd.humidity;
         std::cout << "%, Bat=" << gd.battery << "%, RSSI= "<< int(gd.rssi) << "dBm, MA=" << int(gd.ma) << std::endl;
       }
